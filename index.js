@@ -19,253 +19,256 @@ const AES = (() => {
         65, 153, 45, 15, 176, 84, 187, 22,
     ];
 
-    const INV_SBOX = [
-        82, 9, 106, 213, 48, 54, 165, 56, 191, 64, 163, 158, 129, 243, 215, 251,
-        124, 227, 57, 130, 155, 47, 255, 135, 52, 142, 67, 68, 196, 222, 233,
-        203, 84, 123, 148, 50, 166, 194, 35, 61, 238, 76, 149, 11, 66, 250, 195,
-        78, 8, 46, 161, 102, 40, 217, 36, 178, 118, 91, 162, 73, 109, 139, 209,
-        37, 114, 248, 246, 100, 134, 104, 152, 22, 212, 164, 92, 204, 93, 101,
-        182, 146, 108, 112, 72, 80, 253, 237, 185, 218, 94, 21, 70, 87, 167,
-        141, 157, 132, 144, 216, 171, 0, 140, 188, 211, 10, 247, 228, 88, 5,
-        184, 179, 69, 6, 208, 44, 30, 143, 202, 63, 15, 2, 193, 175, 189, 3, 1,
-        19, 138, 107, 58, 145, 17, 65, 79, 103, 220, 234, 151, 242, 207, 206,
-        240, 180, 230, 115, 150, 172, 116, 34, 231, 173, 53, 133, 226, 249, 55,
-        232, 28, 117, 223, 110, 71, 241, 26, 113, 29, 41, 197, 137, 111, 183,
-        98, 14, 170, 24, 190, 27, 252, 86, 62, 75, 198, 210, 121, 32, 154, 219,
-        192, 254, 120, 205, 90, 244, 31, 221, 168, 51, 136, 7, 199, 49, 177, 18,
-        16, 89, 39, 128, 236, 95, 96, 81, 127, 169, 25, 181, 74, 13, 45, 229,
-        122, 159, 147, 201, 156, 239, 160, 224, 59, 77, 174, 42, 245, 176, 200,
-        235, 187, 60, 131, 83, 153, 97, 23, 43, 4, 126, 186, 119, 214, 38, 225,
-        105, 20, 99, 85, 33, 12, 125,
-    ];
+    const INV_SBOX = (() => {
+        let inv = new Array(256);
+        for (let i = 0; i < 256; i++) inv[SBOX[i]] = i;
+        return inv;
+    })();
 
     const RCON = [
         0x00, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36,
     ];
 
-    const subBytes = (state) => state.map((b) => SBOX[b]);
-    const invSubBytes = (state) => state.map((b) => INV_SBOX[b]);
-
-    const shiftRows = (state) => {
-        let res = [...state];
-        for (let r = 1; r < 4; r++) {
-            res = res.map((b, i) =>
-                i % 4 === r ? state[(i + r * 4) % 16] : b
-            );
-        }
-        return res;
-    };
-
-    const invShiftRows = (state) => {
-        let res = [...state];
-        for (let r = 1; r < 4; r++) {
-            res = res.map((b, i) =>
-                i % 4 === r ? state[(i - r * 4 + 16) % 16] : b
-            );
-        }
-        return res;
-    };
-
-    const mixColumns = (s) => {
-        const mul = (a, b) => {
-            let p = 0;
-            for (let i = 0; i < 8; i++) {
-                if (b & 1) p ^= a;
-                let hiBitSet = a & 0x80;
-                a = (a << 1) & 0xff;
-                if (hiBitSet) a ^= 0x1b;
-                b >>= 1;
-            }
-            return p;
-        };
-        const res = new Array(16);
-        for (let c = 0; c < 4; c++) {
-            const i = c * 4;
-            res[i] = mul(2, s[i]) ^ mul(3, s[i + 1]) ^ s[i + 2] ^ s[i + 3];
-            res[i + 1] = s[i] ^ mul(2, s[i + 1]) ^ mul(3, s[i + 2]) ^ s[i + 3];
-            res[i + 2] = s[i] ^ s[i + 1] ^ mul(2, s[i + 2]) ^ mul(3, s[i + 3]);
-            res[i + 3] = mul(3, s[i]) ^ s[i + 1] ^ s[i + 2] ^ mul(2, s[i + 3]);
-        }
-        return res;
-    };
-
-    const invMixColumns = (s) => {
-        const mul = (a, b) => {
-            let p = 0;
-            for (let i = 0; i < 8; i++) {
-                if (b & 1) p ^= a;
-                let hiBitSet = a & 0x80;
-                a = (a << 1) & 0xff;
-                if (hiBitSet) a ^= 0x1b;
-                b >>= 1;
-            }
-            return p;
-        };
-        const res = new Array(16);
-        for (let c = 0; c < 4; c++) {
-            const i = c * 4;
-            res[i] =
-                mul(14, s[i]) ^
-                mul(11, s[i + 1]) ^
-                mul(13, s[i + 2]) ^
-                mul(9, s[i + 3]);
-            res[i + 1] =
-                mul(9, s[i]) ^
-                mul(14, s[i + 1]) ^
-                mul(11, s[i + 2]) ^
-                mul(13, s[i + 3]);
-            res[i + 2] =
-                mul(13, s[i]) ^
-                mul(9, s[i + 1]) ^
-                mul(14, s[i + 2]) ^
-                mul(11, s[i + 3]);
-            res[i + 3] =
-                mul(11, s[i]) ^
-                mul(13, s[i + 1]) ^
-                mul(9, s[i + 2]) ^
-                mul(14, s[i + 3]);
-        }
-        return res;
-    };
-
-    const addRoundKey = (state, w, round) =>
-        state.map((b, i) => b ^ w[round * 16 + i]);
+    const subByte = (b) => SBOX[b];
+    const invSubByte = (b) => INV_SBOX[b];
 
     const keyExpansion = (key) => {
         const Nk = 4,
             Nr = 10;
-        const w = new Uint8Array(176);
-        w.set(key);
-        for (let i = 16, r = 1; i < 176; i += 4) {
-            let temp = w.slice(i - 4, i);
-            if (i % 16 === 0) {
-                temp = temp.map(
-                    (b, j) =>
-                        SBOX[temp[(j + 1) % 4]] ^ (j === 0 ? RCON[r++] : 0)
-                );
+        let w = new Uint32Array(4 * (Nr + 1));
+        for (let i = 0; i < Nk; i++)
+            w[i] =
+                (key[4 * i] << 24) |
+                (key[4 * i + 1] << 16) |
+                (key[4 * i + 2] << 8) |
+                key[4 * i + 3];
+        for (let i = Nk; i < 4 * (Nr + 1); i++) {
+            let temp = w[i - 1];
+            if (i % Nk === 0) {
+                temp =
+                    (subByte((temp >>> 16) & 0xff) << 24) |
+                    (subByte((temp >>> 8) & 0xff) << 16) |
+                    (subByte(temp & 0xff) << 8) |
+                    subByte(temp >>> 24);
+                temp ^= RCON[i / Nk] << 24;
             }
-            for (let j = 0; j < 4; j++) {
-                w[i + j] = w[i + j - 16] ^ temp[j];
-            }
+            w[i] = w[i - Nk] ^ temp;
         }
         return w;
     };
 
-    const encryptBlock = (input, w) => {
-        let state = addRoundKey(input, w, 0);
-        for (let round = 1; round < 10; round++) {
-            state = mixColumns(shiftRows(subBytes(state)));
-            state = addRoundKey(state, w, round);
+    const addRoundKey = (state, w, round) => {
+        for (let i = 0; i < 4; i++) {
+            let k = w[round * 4 + i];
+            state[i] ^= (k >>> 24) & 0xff;
+            state[i + 4] ^= (k >>> 16) & 0xff;
+            state[i + 8] ^= (k >>> 8) & 0xff;
+            state[i + 12] ^= k & 0xff;
         }
-        state = addRoundKey(shiftRows(subBytes(state)), w, 10);
+    };
+
+    const subBytes = (state) => {
+        for (let i = 0; i < 16; i++) state[i] = subByte(state[i]);
+    };
+    const invSubBytes = (state) => {
+        for (let i = 0; i < 16; i++) state[i] = invSubByte(state[i]);
+    };
+
+    const shiftRows = (state) => {
+        let t = new Uint8Array(16);
+        t[0] = state[0];
+        t[1] = state[5];
+        t[2] = state[10];
+        t[3] = state[15];
+        t[4] = state[4];
+        t[5] = state[9];
+        t[6] = state[14];
+        t[7] = state[3];
+        t[8] = state[8];
+        t[9] = state[13];
+        t[10] = state[2];
+        t[11] = state[7];
+        t[12] = state[12];
+        t[13] = state[1];
+        t[14] = state[6];
+        t[15] = state[11];
+        for (let i = 0; i < 16; i++) state[i] = t[i];
+    };
+
+    const invShiftRows = (state) => {
+        let t = new Uint8Array(16);
+        t[0] = state[0];
+        t[1] = state[13];
+        t[2] = state[10];
+        t[3] = state[7];
+        t[4] = state[4];
+        t[5] = state[1];
+        t[6] = state[14];
+        t[7] = state[11];
+        t[8] = state[8];
+        t[9] = state[5];
+        t[10] = state[2];
+        t[11] = state[15];
+        t[12] = state[12];
+        t[13] = state[9];
+        t[14] = state[6];
+        t[15] = state[3];
+        for (let i = 0; i < 16; i++) state[i] = t[i];
+    };
+
+    const xtime = (b) => ((b << 1) ^ (b & 0x80 ? 0x1b : 0)) & 0xff;
+
+    const mixColumns = (state) => {
+        for (let c = 0; c < 4; c++) {
+            let i = c * 4;
+            let a = state.slice(i, i + 4);
+            let b = a.map((x) => xtime(x));
+            state[i] = b[0] ^ a[3] ^ a[2] ^ b[1] ^ a[1];
+            state[i + 1] = b[1] ^ a[0] ^ a[3] ^ b[2] ^ a[2];
+            state[i + 2] = b[2] ^ a[1] ^ a[0] ^ b[3] ^ a[3];
+            state[i + 3] = b[3] ^ a[2] ^ a[1] ^ b[0] ^ a[0];
+        }
+    };
+
+    const invMixColumns = (state) => {
+        for (let c = 0; c < 4; c++) {
+            let i = c * 4;
+            let a = state.slice(i, i + 4);
+            const mul = (x, n) => {
+                let r = 0;
+                for (let i = 0; i < 8; i++) {
+                    if (n & 1) r ^= x;
+                    let hbit = x & 0x80;
+                    x = (x << 1) & 0xff;
+                    if (hbit) x ^= 0x1b;
+                    n >>= 1;
+                }
+                return r;
+            };
+            state[i] =
+                mul(a[0], 14) ^ mul(a[1], 11) ^ mul(a[2], 13) ^ mul(a[3], 9);
+            state[i + 1] =
+                mul(a[0], 9) ^ mul(a[1], 14) ^ mul(a[2], 11) ^ mul(a[3], 13);
+            state[i + 2] =
+                mul(a[0], 13) ^ mul(a[1], 9) ^ mul(a[2], 14) ^ mul(a[3], 11);
+            state[i + 3] =
+                mul(a[0], 11) ^ mul(a[1], 13) ^ mul(a[2], 9) ^ mul(a[3], 14);
+        }
+    };
+
+    const encryptBlock = (input, w) => {
+        let state = new Uint8Array(input);
+        addRoundKey(state, w, 0);
+        for (let round = 1; round < 10; round++) {
+            subBytes(state);
+            shiftRows(state);
+            mixColumns(state);
+            addRoundKey(state, w, round);
+        }
+        subBytes(state);
+        shiftRows(state);
+        addRoundKey(state, w, 10);
         return state;
     };
 
     const decryptBlock = (input, w) => {
-        let state = addRoundKey(input, w, 10);
+        let state = new Uint8Array(input);
+        addRoundKey(state, w, 10);
         for (let round = 9; round > 0; round--) {
-            state = invSubBytes(invShiftRows(state));
-            state = addRoundKey(state, w, round);
-            state = invMixColumns(state);
+            invShiftRows(state);
+            invSubBytes(state);
+            addRoundKey(state, w, round);
+            invMixColumns(state);
         }
-        state = addRoundKey(invSubBytes(invShiftRows(state)), w, 0);
+        invShiftRows(state);
+        invSubBytes(state);
+        addRoundKey(state, w, 0);
         return state;
     };
 
     const pad = (data) => {
         const padLen = 16 - (data.length % 16);
-        return new Uint8Array([...data, ...new Array(padLen).fill(padLen)]);
+        const res = new Uint8Array(data.length + padLen);
+        res.set(data);
+        res.fill(padLen, data.length);
+        return res;
     };
 
     const unpad = (data) => {
-        const padLen = data[data.length - 1];
+        let padLen = data[data.length - 1];
         return data.slice(0, data.length - padLen);
     };
 
     const toBytes = (str) => new TextEncoder().encode(str);
     const fromBytes = (bytes) => new TextDecoder().decode(bytes);
 
-    const base62Chars =
-        "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    // base62编码（a-zA-Z0-9）
+    const base62chars =
+        "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+
     const base62Encode = (bytes) => {
-        let num = BigInt(
-            "0x" +
-                [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("")
-        );
-        let str = "";
-        while (num > 0) {
-            str = base62Chars[num % 62n] + str;
+        let num = BigInt(0);
+        for (let b of bytes) {
+            num = (num << 8n) + BigInt(b);
+        }
+        if (num === 0n) return "0";
+        let s = "";
+        while (num > 0n) {
+            s = base62chars[Number(num % 62n)] + s;
             num /= 62n;
         }
-        return str || "0";
+        return s;
     };
 
     const base62Decode = (str) => {
-        let num = [...str].reduce(
-            (acc, c) => acc * 62n + BigInt(base62Chars.indexOf(c)),
-            0n
-        );
-        const hex = num
-            .toString(16)
-            .padStart(Math.ceil(num.toString(2).length / 8) * 2, "0");
-        const bytes = hex.match(/.{1,2}/g).map((h) => parseInt(h, 16));
+        let num = BigInt(0);
+        for (let c of str) {
+            let val = base62chars.indexOf(c);
+            if (val < 0) throw new Error("Invalid base62 char");
+            num = num * 62n + BigInt(val);
+        }
+        // 转回字节数组
+        let bytes = [];
+        while (num > 0n) {
+            bytes.unshift(Number(num & 0xffn));
+            num >>= 8n;
+        }
         return Uint8Array.from(bytes);
     };
 
-    const xorBlock = (a, b) => a.map((v, i) => v ^ b[i]);
-
-    const encryptCBC = (data, w, iv) => {
-        let out = new Uint8Array(data.length),
-            prev = iv;
-        for (let i = 0; i < data.length; i += 16) {
-            let block = xorBlock(data.slice(i, i + 16), prev);
-            let enc = encryptBlock(block, w);
-            out.set(enc, i);
-            prev = enc;
-        }
-        return out;
-    };
-
-    const decryptCBC = (data, w, iv) => {
-        let out = new Uint8Array(data.length),
-            prev = iv;
-        for (let i = 0; i < data.length; i += 16) {
-            let block = data.slice(i, i + 16);
-            let dec = decryptBlock(block, w);
-            out.set(xorBlock(dec, prev), i);
-            prev = block;
-        }
-        return out;
-    };
-
-    const randomIV = () => crypto.getRandomValues(new Uint8Array(16));
-
     const encrypt = (plaintext, keyStr) => {
         const key = toBytes(keyStr);
-        if (key.length !== 16) throw new Error("Key must be 16 bytes");
+        if (key.length !== 16) throw new Error("Key length must be 16 bytes");
         const w = keyExpansion(key);
-        const iv = randomIV();
-        const data = pad(toBytes(plaintext));
-        const enc = encryptCBC(data, w, iv);
-        const combined = new Uint8Array(16 + enc.length);
-        combined.set(iv);
-        combined.set(enc, 16);
-        return base62Encode(combined);
+        let data = pad(toBytes(plaintext));
+        let output = new Uint8Array(data.length);
+        for (let i = 0; i < data.length; i += 16) {
+            let block = encryptBlock(data.slice(i, i + 16), w);
+            output.set(block, i);
+        }
+        return base62Encode(output);
     };
 
     const decrypt = (ciphertext, keyStr) => {
         const key = toBytes(keyStr);
-        if (key.length !== 16) throw new Error("Key must be 16 bytes");
+        if (key.length !== 16) throw new Error("Key length must be 16 bytes");
         const w = keyExpansion(key);
-        const raw = base62Decode(ciphertext);
-        const iv = raw.slice(0, 16);
-        const data = raw.slice(16);
-        const dec = decryptCBC(data, w, iv);
-        return fromBytes(unpad(dec));
+        let data = base62Decode(ciphertext);
+        if (data.length % 16 !== 0)
+            throw new Error("Invalid ciphertext length");
+        let output = new Uint8Array(data.length);
+        for (let i = 0; i < data.length; i += 16) {
+            let block = decryptBlock(data.slice(i, i + 16), w);
+            output.set(block, i);
+        }
+        output = unpad(output);
+        return fromBytes(output);
     };
 
     return { encrypt, decrypt };
 })();
 
-export const encrypt = AES.encrypt;
-export const decrypt = AES.decrypt;
+const encrypt = AES.encrypt;
+const decrypt = AES.decrypt;
+
+export { encrypt, decrypt };

@@ -236,30 +236,53 @@ const AES = (() => {
         return Uint8Array.from(bytes);
     };
 
-    const encrypt = (plaintext, keyStr) => {
+    const xorBlock = (block, iv) => {
+        let res = new Uint8Array(16);
+        for (let i = 0; i < 16; i++) {
+            res[i] = block[i] ^ iv[i];
+        }
+        return res;
+    };
+
+    const encrypt = (plaintext, keyStr, ivStr) => {
         const key = toBytes(keyStr);
         if (key.length !== 16) throw new Error("Key length must be 16 bytes");
         const w = keyExpansion(key);
         let data = pad(toBytes(plaintext));
         let output = new Uint8Array(data.length);
+
+        let iv = ivStr ? toBytes(ivStr) : new Uint8Array(16).fill(0);
+        if (iv.length !== 16) throw new Error("IV length must be 16 bytes");
+
         for (let i = 0; i < data.length; i += 16) {
-            let block = encryptBlock(data.slice(i, i + 16), w);
-            output.set(block, i);
+            let block = data.slice(i, i + 16);
+            let xored = xorBlock(block, iv);
+            let encryptedBlock = encryptBlock(xored, w);
+            output.set(encryptedBlock, i);
+            iv = encryptedBlock;
         }
         return base62Encode(output);
     };
 
-    const decrypt = (ciphertext, keyStr) => {
+    const decrypt = (ciphertext, keyStr, ivStr) => {
         const key = toBytes(keyStr);
         if (key.length !== 16) throw new Error("Key length must be 16 bytes");
         const w = keyExpansion(key);
         let data = base62Decode(ciphertext);
         if (data.length % 16 !== 0)
             throw new Error("Invalid ciphertext length");
+
         let output = new Uint8Array(data.length);
+
+        let iv = ivStr ? toBytes(ivStr) : new Uint8Array(16).fill(0);
+        if (iv.length !== 16) throw new Error("IV length must be 16 bytes");
+
         for (let i = 0; i < data.length; i += 16) {
-            let block = decryptBlock(data.slice(i, i + 16), w);
-            output.set(block, i);
+            let block = data.slice(i, i + 16);
+            let decryptedBlock = decryptBlock(block, w);
+            let xored = xorBlock(decryptedBlock, iv);
+            output.set(xored, i);
+            iv = block;
         }
         output = unpad(output);
         return fromBytes(output);
